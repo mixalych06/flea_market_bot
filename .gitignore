@@ -1,0 +1,7 @@
+# created by virtualenv automatically
+.env
+./data/database.db
+.mypy_cache/
+.vscode/
+venv/
+__pycache__/
