@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv(filename='.env'), encoding="utf-8", override=True)
-TOKEN = os.environ.get('TOKENTEST')
+TOKEN = os.environ.get('TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 ADMIN_ID = os.environ.get('ADMIN_ID')
 
