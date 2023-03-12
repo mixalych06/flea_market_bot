@@ -10,10 +10,15 @@ class DataBase:
                                 'contact, value INTEGER DEFAULT 1)')
         self.connection.commit()
 
+    def add_column(self):
+        with self.connection:
+            self.cursor.execute("ALTER TABLE users_products ADD COLUMN city")
+            self.connection.commit()
+
     def adds_user_products(self, user_product):
         with self.connection:
-            self.cursor.execute("INSERT INTO users_products (users_id, name_users, date, photo_id, product_name, specifications, priсe, contact)"
-                                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", user_product)
+            self.cursor.execute("INSERT INTO users_products (users_id, name_users, date, city, photo_id, product_name, specifications, priсe, contact)"
+                                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", user_product)
             self.connection.commit()
 
     def exists_id_product(self, users_id, photo_id):

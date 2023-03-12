@@ -1,4 +1,4 @@
-from create_bot import bot, db, CHAT_ID
+from create_bot import bot, db, CHAT_ID_BL, CHAT_ID_BEL, ADMIN_ID
 from aiogram import types
 from aiogram.utils.exceptions import MessageCantBeDeleted, MessageToDeleteNotFound
 
@@ -46,6 +46,7 @@ async def command_help(message: types.Message):
 
 
 class FSMAddAd(StatesGroup):
+    city = State()
     photo = State()
     product_name = State()
     specifications = State()
@@ -55,15 +56,27 @@ class FSMAddAd(StatesGroup):
 
 async def add_start(message: types.Message):
     number_of_entries = db.number_of_entries_user_products(message.from_user.id)
-    if number_of_entries >= 5:
+    if number_of_entries >= 5 and message.from_user.id != ADMIN_ID:
         await message.answer(
             f'🚆Я пока не могу хранить в памяти больше 5-ти объявлений.\nПожалуйста нажмите кнопку Mои объявления и удалите не нужное.\n'
             f'Но ваше объявление останется опубликованым на канале')
         return
     else:
-        await FSMAddAd.photo.set()
-        await message.reply('🚆Отправьте фото для обьявления', reply_markup=InlineKeyboardMarkup().
+        await FSMAddAd.city.set()
+        await message.reply('🚆Выберите ваш город.', reply_markup=InlineKeyboardMarkup().
+                            add(InlineKeyboardButton("Благовещенск", callback_data=f"city|Благовещенск"),
+                                InlineKeyboardButton("Белогорск", callback_data=f"city|Белогорск")).
                             add(InlineKeyboardButton("Отмена", callback_data=f"cancel")))
+
+
+async def add_city(callback_query: types.CallbackQuery, state: FSMContext):
+    async with state.proxy() as data:
+        inline_command = callback_query.data.split('|')
+        data['city'] = inline_command[1]
+        await FSMAddAd.photo.set()
+        await callback_query.message.reply('🚆Отправьте одно фото для обьявления',
+                                           reply_markup=InlineKeyboardMarkup().add(
+                                               InlineKeyboardButton("Отмена", callback_data=f"cancel")))
 
 
 async def add_ad(message: types.Message, state: FSMContext):
@@ -105,10 +118,10 @@ async def add_contact(message: types.Message, state: FSMContext):
                 time.strftime("%d.%m.%Y %H:%M:%S", time.gmtime())] + list(data.values())
         await state.finish()
         db.adds_user_products(user)
-        id_ad_bd = db.exists_id_product(user[0], user[3])
+        id_ad_bd = db.exists_id_product(user[0], user[4])
         await bot.send_photo(message.from_id, photo=data['photo_id'],
                              caption=f"<u><b>{data['product_name'].strip().upper()}</b></u>\n"
-                                     f"{data['specifications']}\n<b>{data['prise']}</b>\n"
+                                     f"{data['specifications']}\n<b>Цена: </b>{data['prise']}\n"
                                      f"<i><b>{data['contact']}</b></i>",
                              parse_mode='HTML',
                              reply_markup=InlineKeyboardMarkup().add(
@@ -129,9 +142,14 @@ async def del_one_ad(callback_query: types.CallbackQuery):
     inline_command = callback_query.data.split(':')
     db.del_ad_bd(inline_command[1])
     try:
-        await bot.delete_message(CHAT_ID, int(inline_command[2]))
-        await callback_query.answer(text='🚆Объявление удалено',
-                                    show_alert=True)
+        if inline_command[3] == 'Благовещенск':
+            await bot.delete_message(CHAT_ID_BL, int(inline_command[2]))
+            await callback_query.answer(text='🚆Объявление удалено',
+                                        show_alert=True)
+        elif inline_command[3] == 'Белогорск' or not inline_command[3]:
+            await bot.delete_message(CHAT_ID_BEL, int(inline_command[2]))
+            await callback_query.answer(text='🚆Объявление удалено',
+                                        show_alert=True)
     except MessageCantBeDeleted:
         await callback_query.answer(text='🚆Объявление удалено',
                                     show_alert=True)
@@ -139,8 +157,6 @@ async def del_one_ad(callback_query: types.CallbackQuery):
         await callback_query.answer(text='🚆Не получается показать объявление.\n'
                                          'Нажмите на кнопку 📌Мои объявления📌', cache_time=2,
                                     show_alert=True)
-
-
 
 
 async def cancel_fsm(callback_query: types.CallbackQuery, state: FSMContext):
@@ -161,24 +177,30 @@ async def user_ad_all_bd(message: types.Message):
         if len(all_prod) == 1:
             await bot.send_photo(message.from_user.id, photo=all_prod[number][4],
                                  caption=f"<u><b>{all_prod[number][5].strip().upper()}</b></u>\n{all_prod[number][6]}\n"
-                                         f"<b>{all_prod[number][7]}</b>\n<i>{all_prod[number][8]}</i>",
+                                         f"<b>Цена: </b>{all_prod[number][7]}\n<i>{all_prod[number][8]}</i>\n"
+                                         f"<i>опубликовано на канале Обьявления {all_prod[number][10]}</i>",
                                  parse_mode='HTML',
                                  reply_markup=InlineKeyboardMarkup(row_width=4).add(
                                      InlineKeyboardButton(str(number + 1) + '/' + str(len(all_prod)),
                                                           callback_data="null"),
                                      InlineKeyboardButton('❌',
-                                                          callback_data=f"delete:{all_prod[number][0]}:{all_prod[number][9]}")))
+                                                          callback_data=f"delete:{all_prod[number][0]}:"
+                                                                        f"{all_prod[number][9]}:"
+                                                                        f"{all_prod[number][10]}")))
         elif len(all_prod) > 1:
             await bot.send_photo(message.from_user.id, photo=all_prod[number][4],
                                  caption=f"<u><b>{all_prod[number][5].strip().upper()}</b></u>\n{all_prod[number][6]}\n"
-                                         f"<b>{all_prod[number][7]}</b>\n<i>{all_prod[number][8]}</i>",
+                                         f"<b>Цена: </b>{all_prod[number][7]}\n<i>{all_prod[number][8]}</i>\n"
+                                         f"<i>опубликовано на канале Обьявления {all_prod[number][10]}</i>",
                                  parse_mode='HTML',
                                  reply_markup=InlineKeyboardMarkup(row_width=4).add(
                                      InlineKeyboardButton("<<<", callback_data=f"next:{len(all_prod) - 1}"),
                                      InlineKeyboardButton(str(number + 1) + '/' + str(len(all_prod)),
                                                           callback_data="null"),
                                      InlineKeyboardButton('❌',
-                                                          callback_data=f"delete:{all_prod[number][0]}:{all_prod[number][9]}"),
+                                                          callback_data=f"delete:{all_prod[number][0]}:"
+                                                                        f"{all_prod[number][9]}:"
+                                                                        f"{all_prod[number][10]}"),
                                      InlineKeyboardButton(">>>", callback_data=f"next:{number + 1}")))
             return
 
@@ -194,7 +216,8 @@ async def next_ad(callback_query: types.CallbackQuery):
     try:
         phot = InputMediaPhoto(media=all_prod[number][4],
                                caption=f"<u><b>{all_prod[number][5].strip().upper()}</b></u>\n{all_prod[number][6]}\n"
-                                       f"<b>{all_prod[number][7]}</b>\n<i>{all_prod[number][8]}</i>",
+                                       f"<b>Цена: </b>{all_prod[number][7]}\n<i>{all_prod[number][8]}</i>\n"
+                                       f"<i>опубликовано на канале Обьявления {all_prod[number][10]}</i>",
                                parse_mode='HTML')
         if 0 < number < len(all_prod) - 1:
             await callback_query.bot.edit_message_media(chat_id=callback_query.message.chat.id,
@@ -202,7 +225,9 @@ async def next_ad(callback_query: types.CallbackQuery):
                                                         media=phot, reply_markup=InlineKeyboardMarkup(row_width=4).add(
                     InlineKeyboardButton("<<<", callback_data=f"next:{number - 1}"),
                     InlineKeyboardButton(str(number + 1) + '/' + str(len(all_prod)), callback_data="null"),
-                    InlineKeyboardButton('❌', callback_data=f"delete:{all_prod[number][0]}:{all_prod[number][9]}"),
+                    InlineKeyboardButton('❌', callback_data=f"delete:{all_prod[number][0]}:"
+                                                            f"{all_prod[number][9]}:"
+                                                            f"{all_prod[number][10]}"),
                     InlineKeyboardButton(">>>", callback_data=f"next:{number + 1}")))
         elif number == 0:
             await callback_query.bot.edit_message_media(chat_id=callback_query.message.chat.id,
@@ -210,7 +235,9 @@ async def next_ad(callback_query: types.CallbackQuery):
                                                         media=phot, reply_markup=InlineKeyboardMarkup(row_width=4).add(
                     InlineKeyboardButton("<<<", callback_data=f"next:{len(all_prod) - 1}"),
                     InlineKeyboardButton(str(number + 1) + '/' + str(len(all_prod)), callback_data="null"),
-                    InlineKeyboardButton('❌', callback_data=f"delete:{all_prod[number][0]}:{all_prod[number][9]}"),
+                    InlineKeyboardButton('❌', callback_data=f"delete:{all_prod[number][0]}:"
+                                                            f"{all_prod[number][9]}:"
+                                                            f"{all_prod[number][10]}"),
                     InlineKeyboardButton(">>>", callback_data=f"next:{number + 1}")))
         elif number == len(all_prod) - 1:
             await callback_query.bot.edit_message_media(chat_id=callback_query.message.chat.id,
@@ -218,10 +245,13 @@ async def next_ad(callback_query: types.CallbackQuery):
                                                         media=phot, reply_markup=InlineKeyboardMarkup(row_width=4).add(
                     InlineKeyboardButton("<<<", callback_data=f"next:{number - 1}"),
                     InlineKeyboardButton(str(number + 1) + '/' + str(len(all_prod)), callback_data="null"),
-                    InlineKeyboardButton('❌', callback_data=f"delete:{all_prod[number][0]}:{all_prod[number][9]}"),
+                    InlineKeyboardButton('❌', callback_data=f"delete:{all_prod[number][0]}:"
+                                                            f"{all_prod[number][9]}:"
+                                                            f"{all_prod[number][10]}"),
                     InlineKeyboardButton(">>>", callback_data=f"next:{0}")))
     except IndexError:
-        await callback_query.answer('🚆Не получается показать объявление.\nНажмите на кнопку 📌Мои объявления📌', cache_time=2)
+        await callback_query.answer('🚆Не получается показать объявление.\nНажмите на кнопку 📌Мои объявления📌',
+                                    cache_time=2)
 
 
 async def eho(message: types.Message):
@@ -233,15 +263,14 @@ def register_handler_users(dp: Dispatcher):
     dp.register_message_handler(command_help, text=['🆘Помощь'])
     dp.register_message_handler(add_start, text=['📌Подать объявление📌'], state=None)
     dp.register_message_handler(user_ad_all_bd, text=['Мои объявления'])
+    dp.register_callback_query_handler(add_city, lambda x: x.data.startswith('city'), state=FSMAddAd.city)
     dp.register_message_handler(add_ad, content_types=['photo'], state=FSMAddAd.photo)
     dp.register_message_handler(add_product_name, state=FSMAddAd.product_name)
     dp.register_message_handler(add_specifications, state=FSMAddAd.specifications)
     dp.register_message_handler(add_price, state=FSMAddAd.prise)
     dp.register_message_handler(add_contact, state=FSMAddAd.contact)
-
     dp.register_callback_query_handler(cancel_fsm, lambda x: x.data.startswith('cancel'), state='*')
     dp.register_callback_query_handler(del_one_ad, lambda x: x.data.startswith('delete'))
     dp.register_callback_query_handler(next_ad, lambda x: x.data.startswith('next'))
     dp.register_callback_query_handler(del_ad, lambda x: x.data.startswith('del'))
-
     dp.register_message_handler(eho)
