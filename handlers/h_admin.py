@@ -49,10 +49,10 @@ async def sends_to_chat(callback_query: types.CallbackQuery):
         db.update_value(x["message_id"], ad[0])
         await callback_query.message.delete()
     elif ad[10] == 'Белогорск':
-        x = await bot.send_photo(CHAT_ID_BEL, photo=ad[4],
+        y = await bot.send_photo(CHAT_ID_BEL, photo=ad[4],
                                  caption=f"<b>{ad[5].strip().upper()}</b>\n{ad[6]}\n<b>Цена: </b>{ad[7]}\n"
                                          f"<i>{ad[8]}</i>", parse_mode='HTML')
-        db.update_value(x["message_id"], ad[0])
+        db.update_value(y["message_id"], ad[0])
         await callback_query.message.delete()
 
 

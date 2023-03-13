@@ -56,7 +56,7 @@ class FSMAddAd(StatesGroup):
 
 async def add_start(message: types.Message):
     number_of_entries = db.number_of_entries_user_products(message.from_user.id)
-    if number_of_entries >= 5 and message.from_user.id != ADMIN_ID:
+    if number_of_entries >= 5 and message.from_user.id != int(ADMIN_ID):
         await message.answer(
             f'🚆Я пока не могу хранить в памяти больше 5-ти объявлений.\nПожалуйста нажмите кнопку Mои объявления и удалите не нужное.\n'
             f'Но ваше объявление останется опубликованым на канале')
